@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using BepInEx;
@@ -102,7 +103,8 @@ namespace TeleportEverything
 
         private void Awake()
         {
-            Localizer.Load();
+            // Defer localization until Valheim's PlatformPrefs are initialized (avoids NullReferenceException in PlatformPrefs.TryGetPreferencesProvider during chainload).
+            StartCoroutine(LoadLocalizationWhenReady());
 
             CreateConfigValues();
 
@@ -116,6 +118,28 @@ namespace TeleportEverything
 
             ClearIncludeVars();
             Debug.Log($"{ModName} Loaded...");
+        }
+
+        private static IEnumerator LoadLocalizationWhenReady()
+        {
+            const int maxAttempts = 50;
+            const float delaySeconds = 0.2f;
+            for (int i = 0; i < maxAttempts; ++i)
+            {
+                if (i > 0)
+                    yield return new WaitForSeconds(delaySeconds);
+                try
+                {
+                    Localizer.Load();
+                    TeleportEverythingLogger.LogDebug("Localization loaded.");
+                    yield break;
+                }
+                catch (System.Exception ex)
+                {
+                    if (i == maxAttempts - 1)
+                        TeleportEverythingLogger.LogError($"Failed to load localization after {maxAttempts} attempts: {ex.Message}");
+                }
+            }
         }
 
         private void OnDestroy()
